@@ -1,0 +1,27 @@
+---
+- name: Add dynamic hosts from JSON survey
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Parse hosts configuration
+      set_fact:
+        hosts_config: "{{ survey_hosts_config | from_json }}"
+
+    - name: Add hosts to inventory
+      add_host:
+        name: "{{ item.host }}"
+        groups: survey_targets
+        ansible_user: "{{ item.user }}"
+        ansible_password: "{{ item.password }}"
+        ansible_become_user: "{{ item.become_user }}"
+        ansible_become_password: "{{ item.become_password }}"
+      loop: "{{ hosts_config }}"
+
+- name: Perform tasks on the dynamically added hosts
+  hosts: survey_targets
+  gather_facts: yes
+  become: yes
+  tasks:
+    - name: Gather package facts
+      package_facts:
+        manager: auto
