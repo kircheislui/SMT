@@ -5,7 +5,7 @@
   tasks:
     - name: Parse hosts configuration
       set_fact:
-        hosts_config: "{{ survey_hosts_config | from_json }}"
+        hosts_config: "{{ survey_hosts_config }}"
 
     - name: Add hosts to inventory
       add_host:
