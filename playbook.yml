@@ -13,15 +13,10 @@
         groups: survey_targets
         ansible_user: "{{ item.user }}"
         ansible_password: "{{ item.password }}"
-        ansible_become_user: "{{ item.become_user }}"
-        ansible_become_password: "{{ item.become_password }}"
       loop: "{{ hosts_config }}"
 
 - name: Perform tasks on the dynamically added hosts
   hosts: survey_targets
-  gather_facts: yes
-  become: yes
   tasks:
-    - name: Gather package facts
-      package_facts:
-        manager: auto
+    - name: ping test
+      ping:
