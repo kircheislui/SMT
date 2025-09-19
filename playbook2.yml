@@ -1,0 +1,5 @@
+- name: Perform tasks on the dynamically added hosts
+  hosts: survey_targets
+  tasks:
+    - name: ping test
+      ping:
