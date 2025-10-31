@@ -1,0 +1,11 @@
+# playbooks/site.yml - Main playbook
+---
+- name: SSL Certificate Renewal - Full Workflow
+  hosts: "{{ target_hosts | default('webservers') }}"
+  gather_facts: yes
+  become: true
+  become_method: sudo
+  
+  roles:
+    - role: ssl_cert_renewal
+      tags: ['preflight', 'download']

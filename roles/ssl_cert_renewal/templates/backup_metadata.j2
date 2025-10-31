@@ -1,0 +1,32 @@
+{# roles/ssl_cert_renewal/templates/backup_metadata.j2 #}
+=====================================
+SSL Certificate Backup Metadata
+=====================================
+Backup Date: {{ ansible_date_time.iso8601 }}
+Hostname: {{ ansible_hostname }}
+Domain: {{ domain_name }}
+Web Application: {{ web_application_type }}
+
+Original Files:
+  Certificate: {{ current_cert_file }}
+  Key: {{ current_key_file }}
+
+Backup Files:
+  Certificate: {{ backup_cert_file }}
+  Key: {{ backup_key_file }}
+
+{% if current_cert_info is defined and not current_cert_info.failed %}
+Previous Certificate Details:
+  Subject: {{ current_cert_info.subject.commonName | default('N/A') }}
+  Issuer: {{ current_cert_info.issuer.commonName | default('N/A') }}
+  Valid Until: {{ current_cert_info.not_after }}
+  Serial: {{ current_cert_info.serial_number | default('N/A') }}
+{% endif %}
+
+New Certificate Details:
+  Subject: {{ new_cert_info.subject.commonName | default('N/A') }}
+  Issuer: {{ new_cert_info.issuer.commonName | default('N/A') }}
+  Valid Until: {{ new_cert_info.not_after }}
+  Serial: {{ new_cert_info.serial_number | default('N/A') }}
+
+=====================================

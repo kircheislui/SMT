@@ -1,0 +1,17 @@
+# roles/ssl_cert_renewal/vars/main.yml
+---
+# Variables that should not be overridden
+
+# Date format
+backup_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+log_timestamp: "{{ ansible_date_time.iso8601 }}"
+
+# Required packages
+required_packages:
+  - openssl
+  - python3-pip
+
+required_pip_packages:
+  - paramiko
+  - pyopenssl
+  - cryptography

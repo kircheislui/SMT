@@ -1,0 +1,95 @@
+# roles/ssl_cert_renewal/tasks/02_download.yml
+---
+# Phase 2: Download Certificates from SFTP
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 2: Download Certificates from SFTP ==="
+
+#- name: Install Python SFTP packages on control node
+#  pip:
+#    name: "{{ required_pip_packages }}"
+#    state: present
+#  delegate_to: localhost
+#  run_once: true
+#
+#- name: Check if sshpass is installed (for password authentication)
+#  command: which sshpass
+#  register: sshpass_check
+#  failed_when: false
+#  changed_when: false
+#  delegate_to: localhost
+#
+#- name: Install sshpass if using password authentication
+#  package:
+#    name: sshpass
+#    state: present
+#  delegate_to: localhost
+#  when: 
+#    - sshpass_check.rc != 0
+#    - sftp_password is defined
+
+- name: Create local temp directory on control node
+  file:
+    path: "{{ temp_download_dir }}"
+    state: directory
+    mode: '0700'
+  delegate_to: localhost
+
+- name: Download certificate from SFTP server
+  shell: |
+    sshpass -p "{{ sftp_password }}" sftp -o StrictHostKeyChecking=no \
+    {{ sftp_user }}@{{ sftp_host }}:{{ sftp_cert_path }}/{{ domain_name }}/{{ cert_filename }} \
+    {{ temp_download_dir }}/{{ cert_filename }}
+  delegate_to: localhost
+  no_log: true
+  register: cert_download
+  changed_when: cert_download.rc == 0
+
+- name: Download private key from SFTP server
+  shell: |
+    sshpass -p "{{ sftp_password }}" sftp -o StrictHostKeyChecking=no \
+    {{ sftp_user }}@{{ sftp_host }}:{{ sftp_cert_path }}/{{ domain_name }}/{{ key_filename }} \
+    {{ temp_download_dir }}/{{ key_filename }}
+  delegate_to: localhost
+  no_log: true
+  register: key_download
+  changed_when: key_download.rc == 0
+
+- name: Verify certificate file was downloaded
+  stat:
+    path: "{{ temp_download_dir }}/{{ cert_filename }}"
+  register: downloaded_cert
+  delegate_to: localhost
+
+- name: Verify key file was downloaded
+  stat:
+    path: "{{ temp_download_dir }}/{{ key_filename }}"
+  register: downloaded_key
+  delegate_to: localhost
+
+- name: Fail if certificate was not downloaded
+  fail:
+    msg: "Certificate file was not downloaded successfully"
+  when: not downloaded_cert.stat.exists
+
+- name: Fail if key was not downloaded
+  fail:
+    msg: "Key file was not downloaded successfully"
+  when: not downloaded_key.stat.exists
+
+- name: Copy certificate to target host
+  copy:
+    src: "{{ temp_download_dir }}/{{ cert_filename }}"
+    dest: "{{ new_cert_file }}"
+    mode: '0644'
+
+- name: Copy key to target host
+  copy:
+    src: "{{ temp_download_dir }}/{{ key_filename }}"
+    dest: "{{ new_key_file }}"
+    mode: '0600'
+
+- name: Record download completion
+  debug:
+    msg: "Certificate and key downloaded successfully"

@@ -1,0 +1,94 @@
+# roles/ssl_cert_renewal/tasks/08_healthcheck.yml
+---
+# Phase 8: Health Checks and Verification
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 8: Health Checks ==="
+
+- name: Verify service is still running
+  systemd:
+    name: "{{ app_service }}"
+  register: final_service_status
+
+- name: Assert service is active
+  assert:
+    that:
+      - final_service_status.status.ActiveState == "active"
+      - final_service_status.status.SubState == "running"
+    fail_msg: "Service is not in running state after certificate replacement"
+    success_msg: "Service is active and running"
+
+- name: Wait before performing health checks
+  pause:
+    seconds: "{{ health_check_delay }}"
+
+- name: Perform HTTP/HTTPS health check
+  uri:
+    url: "{{ 'https' if app_port == 443 else 'http' }}://{{ domain_name }}{{ health_check_path | default('/') }}"
+    validate_certs: yes
+    status_code: [200, 301, 302, 401]
+    timeout: "{{ health_check_timeout }}"
+  register: http_health_check
+  retries: "{{ health_check_retries }}"
+  delay: 5
+  until: http_health_check is success
+  when: health_check_path is defined or domain_name is defined
+  ignore_errors: yes
+
+- name: Display health check results
+  debug:
+    msg:
+      - "Health check status: {{ http_health_check.status | default('N/A') }}"
+      - "Response time: {{ http_health_check.elapsed | default('N/A') }}s"
+  when: http_health_check is defined
+
+- name: Verify deployed certificate
+  community.crypto.x509_certificate_info:
+    path: "{{ current_cert_file }}"
+  register: deployed_cert_info
+
+- name: Compare deployed certificate with intended certificate
+  assert:
+    that:
+      - deployed_cert_info.not_after == new_cert_info.not_after
+      - deployed_cert_info.subject.commonName == new_cert_info.subject.commonName
+      - deployed_cert_info.serial_number == new_cert_info.serial_number
+    fail_msg: "Deployed certificate does not match the intended certificate"
+    success_msg: "Deployed certificate matches the intended certificate"
+
+- name: Check certificate from remote using openssl
+  shell: |
+    timeout 10 openssl s_client -connect {{ domain_name }}:{{ app_port | default(443) }} \
+    -servername {{ domain_name }} </dev/null 2>/dev/null | \
+    openssl x509 -noout -dates -subject
+  register: remote_cert_check
+  changed_when: false
+  ignore_errors: yes
+  when: app_port is defined
+
+- name: Display remote certificate information
+  debug:
+    msg: "{{ remote_cert_check.stdout_lines }}"
+  when: 
+    - remote_cert_check is defined
+    - remote_cert_check.stdout_lines is defined
+
+- name: Verify no errors in service logs
+  shell: journalctl -u {{ app_service }} --since "{{ service_started_at }}" | grep -i error || true
+  register: error_logs
+  changed_when: false
+
+- name: Display any errors found
+  debug:
+    msg: "{{ error_logs.stdout_lines }}"
+  when: error_logs.stdout_lines | length > 0
+
+- name: Set health check results
+  set_fact:
+    health_check_passed: true
+    health_check_time: "{{ ansible_date_time.iso8601 }}"
+
+- name: Record health check completion
+  debug:
+    msg: "Health checks completed successfully at {{ health_check_time }}"

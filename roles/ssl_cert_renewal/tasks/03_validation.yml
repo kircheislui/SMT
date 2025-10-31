@@ -1,0 +1,111 @@
+# roles/ssl_cert_renewal/tasks/03_validation.yml
+---
+# Phase 3: Certificate Validation and Comparison
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 3: Certificate Validation ==="
+
+- name: Extract information from new certificate
+  community.crypto.x509_certificate_info:
+    path: "{{ new_cert_file }}"
+  register: new_cert_info
+
+- name: Display new certificate details
+  debug:
+    msg:
+      - "Subject: {{ new_cert_info.subject.commonName | default('N/A') }}"
+      - "Issuer: {{ new_cert_info.issuer.commonName | default('N/A') }}"
+      - "Valid From: {{ new_cert_info.not_before }}"
+      - "Valid Until: {{ new_cert_info.not_after }}"
+      - "Serial: {{ new_cert_info.serial_number }}"
+
+- name: Check if current certificate exists
+  stat:
+    path: "{{ current_cert_file }}"
+  register: current_cert_exists
+
+- name: Extract information from current certificate
+  community.crypto.x509_certificate_info:
+    path: "{{ current_cert_file }}"
+  register: current_cert_info
+  when: current_cert_exists.stat.exists
+  ignore_errors: yes
+
+- name: Display current certificate details
+  debug:
+    msg:
+      - "Current Certificate:"
+      - "Valid Until: {{ current_cert_info.not_after }}"
+  when: 
+    - current_cert_exists.stat.exists
+    - current_cert_info is defined
+    - not current_cert_info.failed
+
+- name: Validate certificate domain name
+  assert:
+    that:
+      - (domain_name in new_cert_info.subject.commonName | default('')) or 
+        (domain_name in (new_cert_info.subject_alt_name | map('regex_replace', '^DNS:', '') | list))
+    fail_msg: |
+      Certificate domain mismatch!
+      Expected: {{ domain_name }}
+      Got CN: {{ new_cert_info.subject.commonName | default('N/A') }}
+      Got SANs: {{ new_cert_info.subject_alt_name | default([]) }}
+    success_msg: "Certificate domain validation passed"
+  when: validate_domain | default(true)
+
+- name: Check if new certificate is newer than current
+  assert:
+    that:
+      - new_cert_info.not_after > current_cert_info.not_after
+    fail_msg: |
+      New certificate expires before current certificate!
+      Current expires: {{ current_cert_info.not_after }}
+      New expires: {{ new_cert_info.not_after }}
+    success_msg: "New certificate is newer than current certificate"
+  when:
+    - validate_expiry | default(true)
+    - current_cert_exists.stat.exists
+    - current_cert_info is defined
+    - not current_cert_info.failed
+
+- name: Validate certificate is not expired
+  assert:
+    that:
+      - new_cert_info.not_after > ansible_date_time.iso8601
+    fail_msg: "Certificate is already expired! Expires: {{ new_cert_info.not_after }}"
+    success_msg: "Certificate expiration date is valid"
+  when: validate_expiry | default(true)
+
+- name: Get certificate modulus
+  shell: openssl x509 -noout -modulus -in {{ new_cert_file }} | openssl md5
+  register: cert_modulus
+  changed_when: false
+
+- name: Get key modulus
+  shell: openssl rsa -noout -modulus -in {{ new_key_file }} | openssl md5
+  register: key_modulus
+  changed_when: false
+  no_log: true
+
+- name: Validate certificate and key match
+  assert:
+    that:
+      - cert_modulus.stdout == key_modulus.stdout
+    fail_msg: |
+      Certificate and private key do not match!
+      This would cause service failure.
+    success_msg: "Certificate and private key match"
+  when: validate_key_match | default(true)
+
+- name: Set validation results
+  set_fact:
+    cert_validation_passed: true
+    cert_expiry_date: "{{ new_cert_info.not_after }}"
+    cert_issuer: "{{ new_cert_info.issuer.commonName | default('Unknown') }}"
+    cert_subject: "{{ new_cert_info.subject.commonName | default('Unknown') }}"
+
+- name: Record validation completion
+  debug:
+    msg: "Certificate validation completed successfully"

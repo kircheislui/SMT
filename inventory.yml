@@ -1,0 +1,21 @@
+# inventory.yml
+all:
+  children:
+    webservers:
+      children:
+        apache_servers:
+          hosts:
+            web01.example.com:
+            web02.example.com:
+        
+        nginx_servers:
+          hosts:
+            web03.example.com:
+        
+        tomcat_servers:
+          hosts:
+            app01.example.com:
+
+  vars:
+    ansible_user: ansible
+    ansible_become: yes

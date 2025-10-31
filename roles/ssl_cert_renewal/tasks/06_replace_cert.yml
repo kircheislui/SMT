@@ -1,0 +1,96 @@
+# roles/ssl_cert_renewal/tasks/06_replace_cert.yml
+---
+# Phase 6: Replace Certificates
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 6: Replace Certificates ==="
+
+- name: Ensure certificate directory exists
+  file:
+    path: "{{ app_cert_path }}"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Replace certificate file
+  copy:
+    src: "{{ new_cert_file }}"
+    dest: "{{ current_cert_file }}"
+    remote_src: yes
+    mode: '0644'
+    owner: root
+    group: root
+  register: cert_replaced
+
+- name: Replace key file
+  copy:
+    src: "{{ new_key_file }}"
+    dest: "{{ current_key_file }}"
+    remote_src: yes
+    mode: '0600'
+    owner: root
+    group: root
+  register: key_replaced
+
+- name: Verify certificate file was replaced
+  stat:
+    path: "{{ current_cert_file }}"
+  register: replaced_cert_stat
+
+- name: Verify key file was replaced
+  stat:
+    path: "{{ current_key_file }}"
+  register: replaced_key_stat
+
+- name: Assert files were replaced successfully
+  assert:
+    that:
+      - replaced_cert_stat.stat.exists
+      - replaced_key_stat.stat.exists
+    fail_msg: "Certificate or key files were not replaced successfully"
+    success_msg: "Certificate and key files replaced successfully"
+
+- name: Set SELinux context for certificate files (if SELinux is enabled)
+  sefcontext:
+    target: "{{ item }}"
+    setype: cert_t
+    state: present
+  loop:
+    - "{{ current_cert_file }}"
+    - "{{ current_key_file }}"
+  when: ansible_selinux.status == "enabled"
+  ignore_errors: yes
+
+- name: Apply SELinux context
+  command: restorecon -v {{ item }}
+  loop:
+    - "{{ current_cert_file }}"
+    - "{{ current_key_file }}"
+  when: ansible_selinux.status == "enabled"
+  ignore_errors: yes
+  changed_when: false
+
+- name: Test web server configuration
+  command: "{{ app_config_test }}"
+  register: config_test_result
+  when: 
+    - enable_config_test | default(true)
+    - app_config_test | length > 0
+  failed_when: config_test_result.rc != 0
+
+- name: Display configuration test results
+  debug:
+    msg: "{{ config_test_result.stdout_lines }}"
+  when: 
+    - config_test_result is defined
+    - config_test_result.stdout_lines is defined
+
+- name: Record certificate replacement time
+  set_fact:
+    cert_replaced_at: "{{ ansible_date_time.iso8601 }}"
+
+- name: Record replacement completion
+  debug:
+    msg: "Certificates replaced successfully at {{ cert_replaced_at }}"

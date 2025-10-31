@@ -1,0 +1,8 @@
+# host_vars/web01.example.com.yml
+---
+web_application_type: apache
+domain_name: www.example.com
+cert_filename: example.crt
+key_filename: example.key
+app_port: 443
+health_check_path: /health

@@ -1,0 +1,57 @@
+# roles/ssl_cert_renewal/tasks/05_stop_service.yml
+---
+# Phase 5: Stop Web Application Service
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 5: Stop Web Application Service ==="
+
+- name: Get current service status
+  systemd:
+    name: "{{ app_service }}"
+  register: service_status_before
+
+- name: Display current service status
+  debug:
+    msg:
+      - "Service: {{ app_service }}"
+      - "State: {{ service_status_before.status.ActiveState }}"
+      - "SubState: {{ service_status_before.status.SubState }}"
+
+- name: Stop web application service
+  systemd:
+    name: "{{ app_service }}"
+    state: stopped
+  register: service_stop_result
+
+- name: Wait for service to stop
+  systemd:
+    name: "{{ app_service }}"
+  register: service_stop_check
+  until: service_stop_check.status.ActiveState == "inactive"
+  retries: "{{ (service_stop_timeout | int / 2) | int }}"
+  delay: 2
+
+- name: Verify service has stopped
+  assert:
+    that:
+      - service_stop_check.status.ActiveState == "inactive"
+    fail_msg: "Service {{ app_service }} failed to stop within timeout"
+    success_msg: "Service {{ app_service }} stopped successfully"
+
+- name: Wait for application port to be released
+  wait_for:
+    port: "{{ app_port }}"
+    state: stopped
+    timeout: "{{ port_wait_timeout }}"
+  when: app_port is defined
+  ignore_errors: yes
+
+- name: Record service stop time
+  set_fact:
+    service_stopped_at: "{{ ansible_date_time.iso8601 }}"
+    service_was_active: "{{ service_status_before.status.ActiveState == 'active' }}"
+
+- name: Record service stop completion
+  debug:
+    msg: "Service stopped successfully at {{ service_stopped_at }}"

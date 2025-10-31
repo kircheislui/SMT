@@ -1,0 +1,68 @@
+# roles/ssl_cert_renewal/tasks/07_start_service.yml
+---
+# Phase 7: Start Web Application Service
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 7: Start Web Application Service ==="
+
+- name: Start web application service
+  systemd:
+    name: "{{ app_service }}"
+    state: started
+    enabled: yes
+  register: service_start_result
+
+- name: Wait for service to start
+  systemd:
+    name: "{{ app_service }}"
+  register: service_start_check
+  until: service_start_check.status.ActiveState == "active"
+  retries: "{{ (service_start_timeout | int / 3) | int }}"
+  delay: 3
+
+- name: Verify service is active
+  assert:
+    that:
+      - service_start_check.status.ActiveState == "active"
+      - service_start_check.status.SubState == "running"
+    fail_msg: |
+      Service {{ app_service }} failed to start properly
+      State: {{ service_start_check.status.ActiveState }}
+      SubState: {{ service_start_check.status.SubState }}
+    success_msg: "Service {{ app_service }} started successfully"
+
+- name: Wait for application port to be available
+  wait_for:
+    port: "{{ app_port }}"
+    state: started
+    timeout: "{{ port_wait_timeout }}"
+  when: app_port is defined
+
+- name: Get service logs for verification
+  shell: journalctl -u {{ app_service }} -n 20 --no-pager
+  register: service_logs
+  changed_when: false
+
+- name: Display recent service logs
+  debug:
+    msg: "{{ service_logs.stdout_lines[-10:] }}"
+  when: service_logs.stdout_lines is defined
+
+- name: Record service start time
+  set_fact:
+    service_started_at: "{{ ansible_date_time.iso8601 }}"
+
+- name: Calculate downtime
+  set_fact:
+    service_downtime_seconds: "{{ (ansible_date_time.epoch | int) - (service_stopped_at | to_datetime('%Y-%m-%dT%H:%M:%SZ') | int) }}"
+  when: service_stopped_at is defined
+
+- name: Display downtime information
+  debug:
+    msg: "Service downtime: {{ service_downtime_seconds }} seconds"
+  when: service_downtime_seconds is defined
+
+- name: Record service start completion
+  debug:
+    msg: "Service started successfully at {{ service_started_at }}"

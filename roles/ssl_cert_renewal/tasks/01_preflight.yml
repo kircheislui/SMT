@@ -1,0 +1,89 @@
+# roles/ssl_cert_renewal/tasks/01_preflight.yml
+---
+# Phase 1: Preflight Checks and Setup
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 1: Preflight Checks and Setup ==="
+
+- name: Validate required variables are defined
+  assert:
+    that:
+      - web_application_type is defined
+      - domain_name is defined
+      - cert_filename is defined
+      - key_filename is defined
+    fail_msg: |
+      Required variables missing. Please check your inventory/extra-vars.
+      Required: web_application_type, domain_name, cert_filename, key_filename
+    success_msg: "All required variables are defined"
+
+- name: Validate web application type is supported
+  assert:
+    that:
+      - web_application_type in web_app_mappings.keys()
+    fail_msg: "Unsupported web application type: {{ web_application_type }}"
+    success_msg: "Web application type '{{ web_application_type }}' is supported"
+
+- name: Set web application specific facts
+  set_fact:
+    app_service: "{{ web_app_mappings[web_application_type].service_name }}"
+    app_cert_path: "{{ web_app_mappings[web_application_type].cert_path }}"
+    app_config_test: "{{ web_app_mappings[web_application_type].config_test_cmd }}"
+    app_reload_cmd: "{{ web_app_mappings[web_application_type].reload_cmd }}"
+
+- name: Set certificate file paths
+  set_fact:
+    current_cert_file: "{{ app_cert_path }}/{{ cert_filename }}"
+    current_key_file: "{{ app_cert_path }}/{{ key_filename }}"
+    new_cert_file: "{{ temp_download_dir }}/{{ cert_filename }}"
+    new_key_file: "{{ temp_download_dir }}/{{ key_filename }}"
+    backup_cert_file: "{{ backup_dir }}/{{ cert_filename }}.bak-{{ backup_timestamp }}"
+    backup_key_file: "{{ backup_dir }}/{{ key_filename }}.bak-{{ backup_timestamp }}"
+
+- name: Display configuration summary
+  debug:
+    msg:
+      - "Hostname: {{ ansible_hostname }}"
+      - "Domain: {{ domain_name }}"
+      - "Web App: {{ web_application_type }}"
+      - "Service: {{ app_service }}"
+      - "Cert Path: {{ app_cert_path }}"
+
+- name: Install required system packages
+  package:
+    name: "{{ required_packages }}"
+    state: present
+
+- name: Create temporary download directory
+  file:
+    path: "{{ temp_download_dir }}"
+    state: directory
+    mode: '0700'
+
+- name: Create backup directory if not exists
+  file:
+    path: "{{ backup_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Create log directory if not exists
+  file:
+    path: "{{ log_directory }}"
+    state: directory
+    mode: '0755'
+
+- name: Check if service exists
+  systemd:
+    name: "{{ app_service }}"
+  register: service_exists
+  failed_when: false
+
+- name: Fail if service does not exist
+  fail:
+    msg: "Service {{ app_service }} does not exist on this system"
+  when: service_exists.status is not defined
+
+- name: Record preflight completion
+  debug:
+    msg: "Preflight checks completed successfully"

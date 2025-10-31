@@ -1,0 +1,84 @@
+# roles/ssl_cert_renewal/tasks/99_rollback.yml
+---
+# Rollback Procedure (executed on failure)
+
+- name: Display rollback information
+  debug:
+    msg: "!!! ROLLBACK INITIATED - Restoring original certificates !!!"
+
+- name: Check if backup exists
+  stat:
+    path: "{{ backup_cert_file }}"
+  register: backup_exists
+
+- name: Restore original certificate
+  copy:
+    src: "{{ backup_cert_file }}"
+    dest: "{{ current_cert_file }}"
+    remote_src: yes
+    mode: '0644'
+  when: 
+    - backup_exists.stat.exists
+    - backup_created | default(false)
+  register: cert_restored
+
+- name: Restore original key
+  copy:
+    src: "{{ backup_key_file }}"
+    dest: "{{ current_key_file }}"
+    remote_src: yes
+    mode: '0600'
+  when: 
+    - backup_exists.stat.exists
+    - backup_created | default(false)
+  register: key_restored
+
+- name: Restart service with original certificates
+  systemd:
+    name: "{{ app_service }}"
+    state: restarted
+  when: cert_restored is changed or key_restored is changed
+
+- name: Wait for service to restart
+  systemd:
+    name: "{{ app_service }}"
+  register: rollback_service_status
+  until: rollback_service_status.status.ActiveState == "active"
+  retries: 10
+  delay: 3
+  ignore_errors: yes
+
+- name: Verify service recovery
+  systemd:
+    name: "{{ app_service }}"
+  register: final_rollback_status
+
+- name: Generate failure report
+  template:
+    src: renewal_report.j2
+    dest: "{{ log_directory }}/ssl_renewal_FAILED_{{ domain_name }}_{{ backup_timestamp }}.log"
+    mode: '0644'
+  vars:
+    renewal_status: "FAILED"
+    rollback_performed: true
+
+- name: Display rollback results
+  debug:
+    msg:
+      - "======================================"
+      - "ROLLBACK COMPLETED"
+      - "======================================"
+      - "Service Status: {{ final_rollback_status.status.ActiveState }}"
+      - "Original certificates restored from:"
+      - "  Certificate: {{ backup_cert_file }}"
+      - "  Key: {{ backup_key_file }}"
+      - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      - "======================================"
+
+- name: Fail with rollback information
+  fail:
+    msg: |
+      Certificate renewal failed and rollback was performed.
+      Service Status: {{ final_rollback_status.status.ActiveState }}
+      Original certificates have been restored.
+      Check {{ log_directory }}/ssl_renewal_FAILED_{{ domain_name }}_{{ backup_timestamp }}.log for details.

@@ -1,0 +1,40 @@
+# roles/ssl_cert_renewal/defaults/main.yml
+---
+# Default values for the role
+
+# Application mappings
+web_app_mappings:
+  apache:
+    service_name: "httpd"
+    cert_path: "/etc/httpd/ssl"
+    config_test_cmd: "httpd -t"
+    reload_cmd: "systemctl reload httpd"
+  nginx:
+    service_name: "nginx"
+    cert_path: "/etc/nginx/ssl"
+    config_test_cmd: "nginx -t"
+    reload_cmd: "systemctl reload nginx"
+  tomcat:
+    service_name: "tomcat"
+    cert_path: "/opt/tomcat/ssl"
+    config_test_cmd: ""
+    reload_cmd: "systemctl restart tomcat"
+  apache2:
+    service_name: "apache2"
+    cert_path: "/etc/apache2/ssl"
+    config_test_cmd: "apache2ctl -t"
+    reload_cmd: "systemctl reload apache2"
+
+# Default timeout values
+service_stop_timeout: 30
+service_start_timeout: 60
+port_wait_timeout: 60
+
+# Default certificate validation
+validate_domain: true
+validate_expiry: true
+validate_key_match: true
+
+# Cleanup settings
+cleanup_temp_files: true
+keep_backup_metadata: true

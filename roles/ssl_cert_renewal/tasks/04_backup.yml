@@ -1,0 +1,73 @@
+# roles/ssl_cert_renewal/tasks/04_backup.yml
+---
+# Phase 4: Backup Current Certificates
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 4: Backup Current Certificates ==="
+
+- name: Check if current certificate exists
+  stat:
+    path: "{{ current_cert_file }}"
+  register: current_cert_stat
+
+- name: Check if current key exists
+  stat:
+    path: "{{ current_key_file }}"
+  register: current_key_stat
+
+- name: Display backup information
+  debug:
+    msg:
+      - "Current certificate exists: {{ current_cert_stat.stat.exists }}"
+      - "Current key exists: {{ current_key_stat.stat.exists }}"
+      - "Backup location: {{ backup_dir }}"
+
+- name: Backup existing certificate
+  copy:
+    src: "{{ current_cert_file }}"
+    dest: "{{ backup_cert_file }}"
+    remote_src: yes
+    mode: '0644'
+  when: current_cert_stat.stat.exists
+  register: cert_backup
+
+- name: Backup existing key
+  copy:
+    src: "{{ current_key_file }}"
+    dest: "{{ backup_key_file }}"
+    remote_src: yes
+    mode: '0600'
+  when: current_key_stat.stat.exists
+  register: key_backup
+
+- name: Generate backup metadata
+  template:
+    src: backup_metadata.j2
+    dest: "{{ backup_dir }}/backup_metadata_{{ backup_timestamp }}.txt"
+    mode: '0644'
+  when: keep_backup_metadata | default(true)
+
+- name: Set backup facts
+  set_fact:
+    backup_created: "{{ current_cert_stat.stat.exists and current_key_stat.stat.exists }}"
+    backup_cert_path: "{{ backup_cert_file if current_cert_stat.stat.exists else 'none' }}"
+    backup_key_path: "{{ backup_key_file if current_key_stat.stat.exists else 'none' }}"
+
+- name: Display backup results
+  debug:
+    msg:
+      - "Backup created: {{ backup_created }}"
+      - "Certificate backup: {{ backup_cert_path }}"
+      - "Key backup: {{ backup_key_path }}"
+
+- name: Clean up old backups
+  shell: |
+    find {{ backup_dir }} -name "{{ cert_filename }}.bak-*" -type f -mtime +{{ backup_retention_days }} -delete
+    find {{ backup_dir }} -name "{{ key_filename }}.bak-*" -type f -mtime +{{ backup_retention_days }} -delete
+  when: backup_retention_days is defined
+  changed_when: false
+
+- name: Record backup completion
+  debug:
+    msg: "Backup phase completed successfully"

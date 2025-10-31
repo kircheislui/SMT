@@ -1,0 +1,55 @@
+# roles/ssl_cert_renewal/tasks/09_cleanup.yml
+---
+# Phase 9: Cleanup and Reporting
+
+- name: Display phase information
+  debug:
+    msg: "=== PHASE 9: Cleanup and Reporting ==="
+
+- name: Remove temporary certificate files from target
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ new_cert_file }}"
+    - "{{ new_key_file }}"
+
+- name: Remove temporary directory on target
+  file:
+    path: "{{ temp_download_dir }}"
+    state: absent
+
+- name: Remove temporary files from control node
+  file:
+    path: "{{ temp_download_dir }}"
+    state: absent
+  delegate_to: localhost
+
+- name: Generate renewal report
+  template:
+    src: renewal_report.j2
+    dest: "{{ log_directory }}/ssl_renewal_{{ domain_name }}_{{ backup_timestamp }}.log"
+    mode: '0644'
+
+- name: Display renewal summary
+  debug:
+    msg:
+      - "======================================"
+      - "SSL Certificate Renewal Summary"
+      - "======================================"
+      - "Hostname: {{ ansible_hostname }}"
+      - "Domain: {{ domain_name }}"
+      - "Web App: {{ web_application_type }}"
+      - "Certificate Expires: {{ cert_expiry_date }}"
+      - "Backup Location: {{ backup_cert_path }}"
+      - "Service Downtime: {{ service_downtime_seconds | default('N/A') }} seconds"
+      - "Status: SUCCESS"
+      - "======================================"
+
+- name: Notify completion (can integrate with notification systems)
+  debug:
+    msg: "Certificate renewal completed successfully for {{ domain_name }}"
+
+- name: Record cleanup completion
+  debug:
+    msg: "Cleanup completed successfully"

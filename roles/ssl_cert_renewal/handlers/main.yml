@@ -1,0 +1,17 @@
+# roles/ssl_cert_renewal/handlers/main.yml
+---
+# Handlers for the role
+
+- name: restart web service
+  systemd:
+    name: "{{ app_service }}"
+    state: restarted
+
+- name: reload web service
+  systemd:
+    name: "{{ app_service }}"
+    state: reloaded
+
+- name: validate web config
+  command: "{{ app_config_test }}"
+  when: app_config_test | length > 0

@@ -1,0 +1,49 @@
+# roles/ssl_cert_renewal/tasks/main.yml
+---
+# Main task file - orchestrates all phases
+
+- block:
+  - name: Include preflight checks
+    include_tasks: 01_preflight.yml
+    tags: ['always', 'preflight']
+
+  - name: Include download tasks
+    include_tasks: 02_download.yml
+    tags: ['download']
+
+  - name: Include validation tasks
+    include_tasks: 03_validation.yml
+    tags: ['validation']
+
+  - name: Include backup tasks
+    include_tasks: 04_backup.yml
+    tags: ['backup']
+
+  - name: Include service stop tasks
+    include_tasks: 05_stop_service.yml
+    tags: ['stop', 'service']
+
+  - name: Include certificate replacement tasks
+    include_tasks: 06_replace_cert.yml
+    tags: ['replace']
+
+  - name: Include service start tasks
+    include_tasks: 07_start_service.yml
+    tags: ['start', 'service']
+
+  - name: Include health check tasks
+    include_tasks: 08_healthcheck.yml
+    tags: ['healthcheck']
+    when: enable_health_check | default(true)
+
+  - name: Include cleanup tasks
+    include_tasks: 09_cleanup.yml
+    tags: ['cleanup']
+    when: cleanup_temp_files | default(true)
+
+# Rescue block for rollback
+  rescue:
+  - name: Execute rollback procedure
+    include_tasks: 99_rollback.yml
+    tags: ['always']
+    when: enable_rollback | default(true)

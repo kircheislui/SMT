@@ -1,0 +1,25 @@
+# group_vars/all.yml
+---
+# SFTP Configuration
+sftp_host: "{{ lookup('env', 'SFTP_HOST') | default('sftp.example.com') }}"
+sftp_user: "{{ lookup('env', 'SFTP_USER') | default('certuser') }}"
+sftp_password: "{{ lookup('env', 'SFTP_PASSWORD') | default(vault_sftp_password) }}"
+sftp_cert_path: "/certificates"
+
+# Directory Configuration
+temp_download_dir: "/tmp/ansible_cert_renewal"
+backup_dir: "/etc/ssl/backup"
+log_directory: "/var/log/ansible"
+
+# Backup Configuration
+backup_retention_days: 90
+
+# Health Check Configuration
+health_check_timeout: 30
+health_check_retries: 3
+health_check_delay: 5
+
+# Feature Flags
+enable_rollback: true
+enable_config_test: true
+enable_health_check: true

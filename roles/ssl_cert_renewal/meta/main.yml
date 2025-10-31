@@ -1,0 +1,32 @@
+# roles/ssl_cert_renewal/meta/main.yml
+---
+galaxy_info:
+  author: Your Name
+  description: SSL Certificate Renewal Automation
+  company: Your Company
+  license: MIT
+  min_ansible_version: 2.9
+  
+  platforms:
+    - name: EL
+      versions:
+        - 7
+        - 8
+        - 9
+    - name: Ubuntu
+      versions:
+        - bionic
+        - focal
+        - jammy
+    - name: Debian
+      versions:
+        - buster
+        - bullseye
+  
+  galaxy_tags:
+    - ssl
+    - certificate
+    - security
+    - automation
+
+dependencies: []
